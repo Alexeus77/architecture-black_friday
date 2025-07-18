@@ -1,0 +1,328 @@
+version: '3.8'
+
+name: sharding-repl-cache-api-gateway
+
+services:
+  configSrv: 
+    image: mongo:latest
+    container_name: configSrv # Имя контейнера
+    restart: always
+    ports:
+      - "27017:27017"
+    networks:
+      app-network:
+    volumes:
+      - config-data:/data/db
+    command:
+      [
+        "mongod",
+        "--configsvr",
+        "--replSet",
+        "configReplSet",
+        "--bind_ip_all",
+        "--port",
+        "27017"
+      ]
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 5s
+      start_period: 10s
+      timeout: 5s
+      retries: 5
+
+  shard1_node1:
+    image: mongo:latest
+    container_name: shard1_node1
+    restart: always
+    ports:
+      - "27018:27018"
+    networks:
+      app-network:
+    volumes:
+      - shard1-data-1:/data/db
+    command:
+      [
+        "mongod",
+        "--shardsvr",
+        "--replSet",
+        "shard1ReplSet",
+        "--bind_ip_all",
+        "--port",
+        "27017"
+      ]
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 5s
+      start_period: 10s
+      timeout: 5s
+      retries: 5
+
+  shard1_node2:
+    image: mongo:latest
+    container_name: shard1_node2
+    restart: always
+    networks:
+      app-network:
+    volumes:
+      - shard1-data-2:/data/db
+    command:
+      [
+        "mongod",
+        "--shardsvr",
+        "--replSet",
+        "shard1ReplSet",
+        "--bind_ip_all",
+        "--port",
+        "27017"
+      ]
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 5s
+      start_period: 10s
+      timeout: 5s
+      retries: 5
+
+  shard1_node3:
+    image: mongo:latest
+    container_name: shard1_node3
+    restart: always
+    networks:
+      app-network:
+    volumes:
+      - shard1-data-3:/data/db
+    command:
+      [
+        "mongod",
+        "--shardsvr",
+        "--replSet",
+        "shard1ReplSet",
+        "--bind_ip_all",
+        "--port",
+        "27017"
+      ]
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 5s
+      start_period: 10s
+      timeout: 5s
+      retries: 5
+
+  shard2_node1:
+    image: mongo:latest
+    container_name: shard2_node1
+    restart: always
+    ports:
+      - "27019:27019"
+    networks:
+      app-network:
+    volumes:
+      - shard2-data-1:/data/db
+    command:
+      [
+        "mongod",
+        "--shardsvr",
+        "--replSet",
+        "shard2ReplSet",
+        "--bind_ip_all",
+        "--port",
+        "27017"
+      ]
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 5s
+      start_period: 10s
+      timeout: 5s
+      retries: 5
+
+  shard2_node2:
+    image: mongo:latest
+    container_name: shard2_node2
+    restart: always
+    networks:
+      app-network:
+    volumes:
+      - shard2-data-2:/data/db
+    command:
+      [
+        "mongod",
+        "--shardsvr",
+        "--replSet",
+        "shard2ReplSet",
+        "--bind_ip_all",
+        "--port",
+        "27017"
+      ]
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 5s
+      start_period: 10s
+      timeout: 5s
+      retries: 5
+
+  shard2_node3:
+    image: mongo:latest
+    container_name: shard2_node3
+    restart: always
+    networks:
+      app-network:
+    volumes:
+      - shard2-data-3:/data/db
+    command:
+      [
+        "mongod",
+        "--shardsvr",
+        "--replSet",
+        "shard2ReplSet",
+        "--bind_ip_all",
+        "--port",
+        "27017"
+      ]
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 5s
+      start_period: 10s
+      timeout: 5s
+      retries: 5
+
+  mongos_router:
+    image: mongo:latest
+    container_name: mongos_router
+    restart: always
+    ports:
+      - "27020:27020"
+    networks:
+      app-network:
+    command:
+      [
+        "mongos",
+        "--configdb",
+        "configReplSet/configSrv:27017",
+        "--bind_ip_all",
+        "--port",
+        "27020"
+      ]
+    depends_on:
+      configSrv:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "mongosh", "--port", "27020", "--eval", "db.adminCommand('ping')" ]
+      interval: 5s
+      start_period: 10s
+      timeout: 5s
+      retries: 5
+
+  pymongo_api_1: 
+    container_name: pymongo_api_1
+    build:
+      context: api_app
+      dockerfile: Dockerfile
+    image: kazhem/pymongo_api:1.0.0
+    depends_on:
+      mongos_router:
+        condition: service_started
+      redis:
+        condition: service_started
+    ports:
+      - 8080:8080
+    networks:
+      app-network:
+    environment:
+      MONGODB_URL: "mongodb://mongos_router:27020"
+      MONGODB_DATABASE_NAME: "somedb"
+      REDIS_URL: "redis://redis:6379"
+
+  pymongo_api_2: 
+    container_name: pymongo_api_2
+    build:
+      context: api_app
+      dockerfile: Dockerfile
+    image: kazhem/pymongo_api:1.0.0
+    depends_on:
+      mongos_router:
+        condition: service_started
+      redis:
+        condition: service_started
+    ports:
+      - 8081:8080
+    networks:
+      app-network:
+    environment:
+      MONGODB_URL: "mongodb://mongos_router:27020"
+      MONGODB_DATABASE_NAME: "somedb"
+      REDIS_URL: "redis://redis:6379"
+    
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    networks:
+      app-network:
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  apisix:
+    image: apache/apisix:3.9.0-debian
+    restart: always
+    volumes:
+      - ./apisix_conf.yaml:/usr/local/apisix/conf/config.yaml:ro
+    depends_on:
+      - etcd
+    ##network_mode: host
+    ports:
+      - "9180:9180/tcp"
+      - "9080:9080/tcp"
+      - "9091:9091/tcp"
+      - "9443:9443/tcp"
+      - "9092:9092/tcp"
+    networks:
+      - app-network
+
+  #база данных типа Key-value для APISIX
+  etcd:
+    image: bitnami/etcd:3.5.11
+    restart: always
+    volumes:
+      - etcd_data:/bitnami/etcd
+    environment:
+      ETCD_ENABLE_V2: "true"
+      ALLOW_NONE_AUTHENTICATION: "yes"
+      ETCD_ADVERTISE_CLIENT_URLS: "http://etcd:23790"
+      ETCD_LISTEN_CLIENT_URLS: "http://0.0.0.0:23790"
+    ports:
+      - "23790:23790/tcp"
+    networks:
+      - app-network
+
+  consul:
+    image: consul:1.15.1
+    container_name: consul
+    restart: always
+    networks:
+      - app-network
+    ports:
+      - '8500:8500'
+    command: 'agent -server -bootstrap-expect=1 -node=agent-one -client 0.0.0.0 -log-level info -data-dir=/consul/data -enable-script-checks'
+    volumes:
+      - consul_data:/consul/data
+
+networks:
+  app-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 173.17.0.0/16
+
+volumes:
+  config-data: 
+  shard1-data-1:
+  shard1-data-2:
+  shard1-data-3:
+  shard2-data-1:
+  shard2-data-2:
+  shard2-data-3:
+  redis-data:
+  etcd_data:
+  consul_data:
